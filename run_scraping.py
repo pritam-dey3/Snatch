@@ -3,9 +3,9 @@ from pathlib import Path
 from scrape import scrape_urls
 from utils import get_id
 
-url_path = "/scrape/data/question_urls.txt"
-html_dir = Path("/scrape/html_files/")
-html_dir.mkdir(exist_ok=True, parents=True)
+url_path = "/scrape/urls.txt"
+save_dir = Path("/scrape/save_dir/")
+save_dir.mkdir(exist_ok=True, parents=True)
 
 
 def get_urls():
@@ -13,7 +13,7 @@ def get_urls():
         urls = [ln.strip() for ln in f.readlines()]
 
     existing_ids = []
-    for p in html_dir.iterdir():
+    for p in save_dir.iterdir():
         existing_ids.append(p.stem)
 
     return [url for url in urls if get_id(url) not in existing_ids]
@@ -22,5 +22,5 @@ def get_urls():
 urls_to_scrape = get_urls()
 while len(urls_to_scrape) > 0:
     print(f"Scraping {len(urls_to_scrape)} URLs.")
-    scrape_urls(urls_to_scrape)
+    scrape_urls(urls_to_scrape, system="debian")
     urls_to_scrape = get_urls()
