@@ -3,8 +3,9 @@ from pathlib import Path
 from scrape import scrape_urls
 from utils import get_id
 
-url_path = "/scrape/urls.txt"
+url_path = "/scrape/data/question_urls.txt"
 html_dir = Path("/scrape/html_files/")
+html_dir.mkdir(exist_ok=True, parents=True)
 
 
 def get_urls():

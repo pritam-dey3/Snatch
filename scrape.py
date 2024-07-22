@@ -4,19 +4,15 @@ import threading
 import time
 import traceback as tb
 import uuid
-from multiprocessing.pool import ThreadPool
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from driver import get_driver
+from utils import get_id, start_xvfb, stop_xvfb
 
-from tbselenium.tbdriver import TorBrowserDriver
-from tbselenium.utils import start_xvfb, stop_xvfb
-
-from utils import get_id
-
-
-html_dir = Path("/scrape/html_files/")
-tor_browser_path = "/snatch/tor-browser/"
-fail_threshold = 20
-
+SYS = "amd64"
+HTML_DIR = Path("/scrape/html_files/")
+GECKO_PATH = Path("/snatch/tor-browser/")
+THREAD_FAIL_LIMIT = 20
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,18 +21,15 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-
-html_dir.mkdir(exist_ok=True)
-
-thread_local = threading.local()
-thread_local.n_failures = 0
+THREAD_LOCAL = threading.local()
+THREAD_LOCAL.n_failures = 0
 
 
 class Driver:
-    def __init__(self):
+    def __init__(self, system: str = ""):
         self.id = uuid.uuid4()
         self.display = start_xvfb()
-        self.driver = TorBrowserDriver(tor_browser_path)
+        self.driver = get_driver(system=system)
         self.driver.set_page_load_timeout(15)
         logging.info(f"Created driver {self.id}.")
 
@@ -47,10 +40,10 @@ class Driver:
 
     @classmethod
     def create_driver(cls):
-        the_driver = getattr(thread_local, "the_driver", None)
+        the_driver = getattr(THREAD_LOCAL, "the_driver", None)
         if the_driver is None:
             the_driver = cls()
-            thread_local.the_driver = the_driver
+            THREAD_LOCAL.the_driver = the_driver
         driver = the_driver.driver
         the_driver = None
         return driver
@@ -60,6 +53,7 @@ def scraper(url):
     """
     This now scrapes a single URL.
     """
+
     start = time.time()
 
     try:
@@ -68,33 +62,50 @@ def scraper(url):
         driver.get(url)
         url_id = get_id(url)
 
-        file = html_dir / f"{url_id}.html"
+        file = HTML_DIR / f"{url_id}.html"
         with open(file, "w") as f:
             f.write(driver.page_source)
     except Exception as e:
         logging.error(f"Error scraping {url}: {e}\n{tb.format_exc()}")
-        n_failures = getattr(thread_local, "n_failures", 0)
+        n_failures = getattr(THREAD_LOCAL, "n_failures", 0)
         n_failures += 1
-        if n_failures > fail_threshold:
+        if n_failures > THREAD_FAIL_LIMIT:
+            logging.error("Too many failures, exiting thread.")
             raise RuntimeError("Too many failures")
-        thread_local.n_failures = n_failures
+        THREAD_LOCAL.n_failures = n_failures
 
     end = time.time()
     logging.info(f"processing finished of {url} in {end - start:.2f} seconds.")
 
 
-def scrape_urls(urls: list[str]):
-    with ThreadPool() as pool:
-        try:
-            pool.map(scraper, urls)
-        except RuntimeError as e:
-            logging.error(f"Error: {e}, probably too many failures")
-        except AttributeError as e:
-            logging.error(f"Error: {e}, probably too many failures")
+def scrape_urls(
+    urls: list[str],
+    system: str = "",
+    html_dir: Path | None = None,
+    gecko_path: Path | None = None,
+    thread_fail_limit: int | None = None,
+    n_threads: int | None = None,
+):
+    global SYS, HTML_DIR, GECKO_PATH, THREAD_FAIL_LIMIT
+    SYS = system if system else SYS
+    HTML_DIR = html_dir if html_dir else HTML_DIR
+    GECKO_PATH = gecko_path if gecko_path else GECKO_PATH
+    THREAD_FAIL_LIMIT = thread_fail_limit if thread_fail_limit else THREAD_FAIL_LIMIT
+
+    logging.info(f"Using {SYS=}, {THREAD_FAIL_LIMIT=}, {HTML_DIR=}, {GECKO_PATH=}")
+
+    with ThreadPoolExecutor(max_workers=n_threads) as executor:
+        futures = [executor.submit(scraper, url) for url in urls]
+        for future in futures:
+            try:
+                future.result()
+            except RuntimeError as e:
+                logging.error(f"Error: {e}, probably too many failures")
+                executor.shutdown(wait=False)
+
 
         # Must ensure drivers are quitted before threads are destroyed:
         # del thread_local
         # This should ensure that the __del__ method is run on class Driver:
         gc.collect()
-        pool.close()
-        pool.join()
+        executor.shutdown()
