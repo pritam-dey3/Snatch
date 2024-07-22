@@ -1,42 +1,66 @@
 from selenium import webdriver
 import logging
+from typing import Literal
 
+
+SystemType = Literal["", "rpi5", "debian"]
 
 def set_options(
-    system: str = "",
+    system: SystemType = "",
     port: int = 9050,
     user_agent: str = "",
-    timeout: int = 15,
-    script_timeout: int = 15,
+    save_dir: str = "",
 ):
     if not user_agent:
         if system == "rpi5":
             user_agent = (
                 "Mozilla/5.0 (X11; Linux aarch64; rv:90.0) Gecko/20100101 Firefox/90.0"
             )
+        elif system == "debian":
+            user_agent = (
+                "Mozilla/5.0 (X11; Linux x86_64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/91.0.4472.124 Safari/537.36"
+            )
         else:
-            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            user_agent += "AppleWebKit/537.36 (KHTML, like Gecko) "
-            user_agent += "Chrome/42.0.2311.135 Safari/537.36 Edge/12.246"
-        logging.info(f"No user agent provided. Using default: {user_agent}")
+            user_agent = (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/91.0.4472.124 Safari/537.36"
+            )
+    logging.info(f"Using user agent: {user_agent}")
 
     opt = webdriver.FirefoxOptions()
     opt.set_preference("network.proxy.type", 1)
     opt.set_preference("network.proxy.socks", "127.0.0.1")
     opt.set_preference("network.proxy.socks_port", port)
     opt.set_preference("general.useragent.override", user_agent)
-    opt.set_preference("http.response.timeout", timeout)
-    opt.set_preference("dom.max_script_run_time", script_timeout)
+
+    # Enable JavaScript
+    opt.set_preference("javascript.enabled", True)
+
+    # Other preferences to mimic real user behavior
+    opt.set_preference("dom.webdriver.enabled", False)
+    opt.set_preference("media.peerconnection.enabled", False)
+    opt.set_preference("useAutomationExtension", False)
+    opt.set_preference("permissions.default.image", 2)  # This can disable images for faster scraping, set to 1 to enable images
+    opt.set_preference("permissions.default.stylesheet", 2)  # This can disable CSS for faster scraping, set to 1 to enable CSS
+    opt.set_preference("permissions.default.script", 1)  # Ensure scripts are allowed
+
+    # Download options
+    opt.set_preference("browser.download.folderList", 2)  # Use custom download directory
+    opt.set_preference("browser.download.dir", save_dir)
+    opt.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/pdf")
+    opt.set_preference("pdfjs.disabled", True)  # Disable Firefox's built-in PDF viewer
     return opt
 
 
 def get_driver(
-    system: str = "",
+    system: SystemType = "",
     executable_path: str = "",
     port: int = 9050,
     user_agent: str = "",
-    timeout: int = 15,
-    script_timeout: int = 15,
+    save_dir: str = "",
 ):
     if system == "rpi5":
         logging.info("Using Raspberry Pi 5.")
@@ -49,8 +73,7 @@ def get_driver(
                 system,
                 port=port,
                 user_agent=user_agent,
-                timeout=timeout,
-                script_timeout=script_timeout,
+                save_dir=save_dir,
             ),
             service=sv,
         )
@@ -61,7 +84,6 @@ def get_driver(
                 system,
                 port=port,
                 user_agent=user_agent,
-                timeout=timeout,
-                script_timeout=script_timeout,
+                save_dir=save_dir,
             )
         )
