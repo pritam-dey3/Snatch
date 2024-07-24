@@ -36,7 +36,7 @@ THREAD_LOCAL.n_failures = 0
 
 def scraper[T](
     url: str,
-    page_handler: Callable[[Firefox], T],
+    driver_callback: Callable[[Firefox], T],
     executable_path: Path,
     save_dir: str,
     system: SystemType,
@@ -59,7 +59,7 @@ def scraper[T](
         )
         logging.info(f"Getting data from: {url}")
         driver.get(url)
-        res: T = page_handler(driver)
+        res: T = driver_callback(driver)
 
         end = time.time()
         logging.info(f"processing finished of {url} in {end - start:.2f} seconds.")
@@ -76,7 +76,7 @@ def scraper[T](
 
 def scrape_urls[T](
     urls: Iterable[str],
-    page_handler: Callable[[Firefox], T],
+    driver_callback: Callable[[Firefox], T],
     executable_path: Path,
     system: SystemType = "",
     save_dir="",
@@ -92,7 +92,7 @@ def scrape_urls[T](
             executor.submit(
                 scraper,
                 url=url,
-                page_handler=page_handler,
+                driver_callback=driver_callback,
                 executable_path=executable_path,
                 save_dir=save_dir,
                 system=system,
