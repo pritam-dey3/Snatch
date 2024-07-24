@@ -9,6 +9,7 @@ packages = [{include = "snatch"}]
 python = "^3.12"
 selenium = "^4.0.0"
 pyvirtualdisplay = "*"
+tqdm = "*"
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "wheel"]

@@ -8,8 +8,10 @@ from pathlib import Path
 from subprocess import PIPE, call
 from typing import Callable, Iterable
 
-from snatch.driver import SystemType, Driver
 from selenium.webdriver import Firefox
+from tqdm import tqdm
+
+from snatch.driver import Driver, SystemType
 
 # check if tor service is running, if not start tor
 status = call(["service", "tor", "status"], stdout=PIPE)
@@ -99,14 +101,13 @@ def scrape_urls[T](
             )
             for url in urls
         ]
-        for future in futures:
+        for future in tqdm(futures):
             try:
                 res = future.result()
                 if res is not None:
                     results.append(res)
             except RuntimeError as e:
                 logging.error(f"Error: {e}, probably too many failures")
-                executor.shutdown()
                 break
             except KeyboardInterrupt:
                 logging.error("KeyboardInterrupt, exiting.")
