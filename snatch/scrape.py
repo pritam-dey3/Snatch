@@ -3,15 +3,13 @@ import logging
 import threading
 import time
 import traceback as tb
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from subprocess import PIPE, call
-from typing import Callable
+from typing import Callable, Iterable
 
-from snatch.driver import SystemType, get_driver
+from snatch.driver import SystemType, Driver
 from selenium.webdriver import Firefox
-from snatch.utils import start_xvfb, stop_xvfb
 
 # check if tor service is running, if not start tor
 status = call(["service", "tor", "status"], stdout=PIPE)
@@ -19,6 +17,8 @@ if status == 4:
     call(["service", "tor", "start"], stdout=PIPE)
 elif status in [1, 2, 3]:
     print(f"Tor service is not available. `service tor status` returned: {status}.")
+
+# TODO: check if tor is running on port 9050
 
 
 logging.basicConfig(
@@ -32,38 +32,14 @@ THREAD_LOCAL = threading.local()
 THREAD_LOCAL.n_failures = 0
 
 
-class Driver:
-    def __init__(self, system: SystemType, gecko_path: str):
-        self.id = uuid.uuid4()
-        self.display = start_xvfb()
-        self.driver = get_driver(system=system, executable_path=gecko_path)
-        # self.driver.set_page_load_timeout(15)
-        logging.info(f"Created driver {self.id}.")
-
-    def __del__(self):
-        self.driver.quit()  # clean up driver when we are cleaned up
-        stop_xvfb(self.display)
-        logging.info(f"The driver {self.id} has been quitted.")
-
-    @classmethod
-    def create_driver(cls, system: SystemType, gecko_path: str | Path):
-        if isinstance(gecko_path, Path):
-            gecko_path = gecko_path.as_posix()
-        the_driver = getattr(THREAD_LOCAL, "the_driver", None)
-        if the_driver is None:
-            the_driver = cls(system, gecko_path)
-            THREAD_LOCAL.the_driver = the_driver
-        driver = the_driver.driver
-        the_driver = None
-        return driver
-
-
 def scraper[T](
     url: str,
     page_handler: Callable[[Firefox], T],
-    gecko_path: Path,
+    executable_path: Path,
+    save_dir: str,
     system: SystemType,
     thread_fail_limit: int,
+    timeout: int,
 ) -> T | None:
     """
     This now scrapes a single URL.
@@ -72,7 +48,13 @@ def scraper[T](
     start = time.time()
 
     try:
-        driver = Driver.create_driver(system, gecko_path)
+        driver = Driver.create(
+            system=system,
+            thread_local=THREAD_LOCAL,
+            executable_path=executable_path,
+            save_dir=save_dir,
+            timeout=timeout,
+        )
         logging.info(f"Getting data from: {url}")
         driver.get(url)
         res: T = page_handler(driver)
@@ -91,20 +73,29 @@ def scraper[T](
 
 
 def scrape_urls[T](
-    urls: list[str],
-    system: SystemType,
+    urls: Iterable[str],
     page_handler: Callable[[Firefox], T],
-    gecko_path: Path,
-    thread_fail_limit: int,
+    executable_path: Path,
+    system: SystemType = "",
+    save_dir="",
+    thread_fail_limit: int = 20,
+    timeout: int = 180,
     n_threads: int | None = None,
 ) -> list[T]:
-    logging.info(f"Using {system=}, {gecko_path=}, {thread_fail_limit=}")
+    logging.info(f"Using {system=}, {executable_path=}, {thread_fail_limit=}")
 
     results: list[T] = []
     with ThreadPoolExecutor(max_workers=n_threads) as executor:
         futures = [
             executor.submit(
-                scraper, url, page_handler, gecko_path, system, thread_fail_limit
+                scraper,
+                url=url,
+                page_handler=page_handler,
+                executable_path=executable_path,
+                save_dir=save_dir,
+                system=system,
+                thread_fail_limit=thread_fail_limit,
+                timeout=timeout,
             )
             for url in urls
         ]
@@ -115,7 +106,12 @@ def scrape_urls[T](
                     results.append(res)
             except RuntimeError as e:
                 logging.error(f"Error: {e}, probably too many failures")
+                executor.shutdown()
                 break
+            except KeyboardInterrupt:
+                logging.error("KeyboardInterrupt, exiting.")
+                executor.shutdown()
+                raise KeyboardInterrupt("KeyboardInterrupt")
 
     # make sure the threads are all destroyed
     del THREAD_LOCAL.the_driver

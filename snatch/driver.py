@@ -1,7 +1,11 @@
 import logging
 from typing import Literal
+import uuid
+from pathlib import Path
+import threading
 
-from selenium import webdriver
+from selenium.webdriver import Firefox, FirefoxOptions, FirefoxService
+from snatch.utils import start_xvfb, stop_xvfb
 
 SystemType = Literal["", "rpi5", "debian"]
 
@@ -31,7 +35,7 @@ def set_options(
             )
     logging.info(f"Using user agent: {user_agent}")
 
-    opt = webdriver.FirefoxOptions()
+    opt = FirefoxOptions()
     opt.set_preference("network.proxy.type", 1)
     opt.set_preference("network.proxy.socks", "127.0.0.1")
     opt.set_preference("network.proxy.socks_port", port)
@@ -58,8 +62,53 @@ def set_options(
     )  # Use custom download directory
     opt.set_preference("browser.download.dir", save_dir)
     opt.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/pdf")
-    opt.set_preference("pdfjs.disabled", True)  # Disable Firefox's built-in PDF viewer
+    # opt.set_preference("pdfjs.disabled", True)  # Disable Firefox's built-in PDF viewer
     return opt
+
+
+class Driver:
+    def __init__(
+        self, system: SystemType, executable_path: str, save_dir: str, timeout: int
+    ):
+        self.id = uuid.uuid4()
+        self.display = start_xvfb()
+        self.driver = get_driver(
+            system=system, executable_path=executable_path, save_dir=save_dir, port=9050
+        )
+        self.driver.set_page_load_timeout(timeout)
+        logging.info(f"Created driver {self.id}.")
+
+    def __del__(self):
+        self.driver.quit()  # clean up driver when we are cleaned up
+        stop_xvfb(self.display)
+        logging.info(f"The driver {self.id} has been quitted.")
+
+    @classmethod
+    def create(
+        cls,
+        system: SystemType,
+        thread_local: threading.local,
+        executable_path: str | Path,
+        save_dir: str | Path,
+        timeout: int,
+    ) -> Firefox:
+        if isinstance(save_dir, Path):
+            save_dir = save_dir.as_posix()
+        if isinstance(executable_path, Path):
+            executable_path = executable_path.as_posix()
+        the_driver = getattr(thread_local, "the_driver", None)
+        if the_driver is None:
+            the_driver = cls(
+                system=system,
+                executable_path=executable_path,
+                save_dir=save_dir,
+                timeout=timeout,
+            )
+            thread_local.the_driver = the_driver
+        driver = the_driver.driver
+        the_driver = None
+        return driver
+
 
 
 def get_driver(
@@ -74,8 +123,8 @@ def get_driver(
         if not executable_path:
             executable_path = "/usr/local/bin/geckodriver"
         logging.info(f"Using geckodriver at {executable_path}.")
-        sv = webdriver.FirefoxService(executable_path=executable_path)
-        return webdriver.Firefox(
+        sv = FirefoxService(executable_path=executable_path)
+        return Firefox(
             options=set_options(
                 system,
                 port=port,
@@ -86,7 +135,7 @@ def get_driver(
         )
     else:
         logging.info("Using amd64.")
-        return webdriver.Firefox(
+        return Firefox(
             options=set_options(
                 system,
                 port=port,
