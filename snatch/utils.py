@@ -1,9 +1,4 @@
-from hashlib import sha256
 from pyvirtualdisplay import Display
-
-
-def get_id(url: str) -> str:
-    return sha256(url.encode()).hexdigest()
 
 
 def start_xvfb(**kwargs):

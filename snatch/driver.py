@@ -1,9 +1,10 @@
-from selenium import webdriver
 import logging
 from typing import Literal
 
+from selenium import webdriver
 
 SystemType = Literal["", "rpi5", "debian"]
+
 
 def set_options(
     system: SystemType = "",
@@ -43,12 +44,18 @@ def set_options(
     opt.set_preference("dom.webdriver.enabled", False)
     opt.set_preference("media.peerconnection.enabled", False)
     opt.set_preference("useAutomationExtension", False)
-    opt.set_preference("permissions.default.image", 2)  # This can disable images for faster scraping, set to 1 to enable images
-    opt.set_preference("permissions.default.stylesheet", 2)  # This can disable CSS for faster scraping, set to 1 to enable CSS
+    opt.set_preference(
+        "permissions.default.image", 2
+    )  # This can disable images for faster scraping, set to 1 to enable images
+    opt.set_preference(
+        "permissions.default.stylesheet", 2
+    )  # This can disable CSS for faster scraping, set to 1 to enable CSS
     opt.set_preference("permissions.default.script", 1)  # Ensure scripts are allowed
 
     # Download options
-    opt.set_preference("browser.download.folderList", 2)  # Use custom download directory
+    opt.set_preference(
+        "browser.download.folderList", 2
+    )  # Use custom download directory
     opt.set_preference("browser.download.dir", save_dir)
     opt.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/pdf")
     opt.set_preference("pdfjs.disabled", True)  # Disable Firefox's built-in PDF viewer
