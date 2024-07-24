@@ -4,3 +4,4 @@ __pycache__
 tests/
 data/
 dist/
+snatch.egg-info/

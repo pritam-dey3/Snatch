@@ -1,9 +1,0 @@
-pyproject.toml
-snatch/__init__.py
-snatch/driver.py
-snatch/scrape.py
-snatch/utils.py
-snatch.egg-info/PKG-INFO
-snatch.egg-info/SOURCES.txt
-snatch.egg-info/dependency_links.txt
-snatch.egg-info/top_level.txt
