@@ -52,8 +52,9 @@ def save_html_file(html: str | None, url: str, config: Config):
         logging.error(f"Failed to get data from {url}.")
         return
 
+    config.html_dir.mkdir(parents=True, exist_ok=True)
     filename = config.html_dir / f"{get_id(url)}.html"
-    with open(filename, "w") as f:
+    with open(filename, "w+") as f:
         f.write(html)
 
     with open(config.completed_urls_file, "a") as f:
