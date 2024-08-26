@@ -14,6 +14,7 @@ selenium = "*"
 pyvirtualdisplay = "*"
 cyclopts = "*"
 pydantic-settings = {version = "*", extras = ["yaml"]}
+tqdm = "*"
 
 [tool.poetry.dev-dependencies]
 # Add your development dependencies here, for example:

@@ -19,7 +19,7 @@ RUN pip install -e .
 # service tor start
 # Xvfb :1 -screen 0 1024x768x16 &
 # export DISPLAY=:1
-# RUN Xvfb -nolisten tcp :1 & echo $? > display.pid
+RUN Xvfb -nolisten tcp :1 & echo $? > display.pid
 # service tor status
 # ps -ef | grep Xvfb
 

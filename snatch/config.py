@@ -21,10 +21,11 @@ class DriverConfig(BaseModel):
 
 class Config(BaseSettings, cli_parse_args=False):
     urls_file: Path = Path("urls.txt")
+    completed_urls_file: Path = Path("completed_urls.txt")
     html_dir: Path = Path("html_files/")
     rel_xpath: str = "//body"
     n_threads: int | None = None
-    thread_fail_limit: int = 20
+    fail_limit: int = 20
     driver: DriverConfig = DriverConfig()
 
 
