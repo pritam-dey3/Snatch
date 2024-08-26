@@ -1,0 +1,30 @@
+[tool.poetry]
+authors = ["Pritam Dey <pritam.pritamdey.984@gmail.com>"]
+description = "Scrape urls without getting blocked"
+license = "MIT"
+name = "snatch"
+# packages = [
+#   {include = "*", from = "snatch"},
+# ]
+version = "0.0.1"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+selenium = "*"
+pyvirtualdisplay = "*"
+cyclopts = "*"
+pydantic-settings = {version = "*", extras = ["yaml"]}
+
+[tool.poetry.dev-dependencies]
+# Add your development dependencies here, for example:
+# pytest = "^6.2.2"
+
+[tool.poetry.scripts]
+snatch = "snatch.cli:app"
+
+[build-system]
+build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=1.0.0"]
+
+# [tool.pytest.ini_options]
+# python_files = ["tests/**/*.py"]

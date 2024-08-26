@@ -6,13 +6,12 @@ import traceback as tb
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from driver import get_driver
-from utils import get_id, start_xvfb, stop_xvfb
+from selenium.webdriver import Firefox
+from selenium.webdriver.common.by import By
 
-SYS = "amd64"
-HTML_DIR = Path("/scrape/html_files/")
-GECKO_PATH = Path("/snatch/tor-browser/")
-THREAD_FAIL_LIMIT = 20
+from snatch.config import Config
+from snatch.driver import get_driver
+from snatch.utils import get_id, start_xvfb, stop_xvfb
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,20 +25,20 @@ THREAD_LOCAL.n_failures = 0
 
 
 class Driver:
-    def __init__(self, system: str = ""):
+    def __init__(self):
         self.id = uuid.uuid4()
         self.display = start_xvfb()
-        self.driver = get_driver(system=system)
-        self.driver.set_page_load_timeout(15)
+        self.driver = get_driver()
+        # self.driver.set_page_load_timeout(15)
         logging.info(f"Created driver {self.id}.")
 
     def __del__(self):
         self.driver.quit()  # clean up driver when we are cleaned up
         stop_xvfb(self.display)
-        logging.info(f"The driver {self.id} has been quitted.")
+        logging.info(f"The driver {self.id} has quit.")
 
     @classmethod
-    def create_driver(cls):
+    def create_driver(cls) -> Firefox:
         the_driver = getattr(THREAD_LOCAL, "the_driver", None)
         if the_driver is None:
             the_driver = cls()
@@ -49,7 +48,7 @@ class Driver:
         return driver
 
 
-def scraper(url):
+def scraper(url: str, html_dir: Path, thread_fail_limit: int, rel_xpath: str):
     """
     This now scrapes a single URL.
     """
@@ -62,14 +61,18 @@ def scraper(url):
         driver.get(url)
         url_id = get_id(url)
 
-        file = HTML_DIR / f"{url_id}.html"
+        file = html_dir / f"{url_id}.html"
+        html = driver.find_element(By.XPATH, rel_xpath).get_attribute("outerHTML")
+        if html is None:
+            logging.error(f"Could not find HTML for {url}")
+            return
         with open(file, "w") as f:
-            f.write(driver.page_source)
+            f.write(html)
     except Exception as e:
         logging.error(f"Error scraping {url}: {e}\n{tb.format_exc()}")
         n_failures = getattr(THREAD_LOCAL, "n_failures", 0)
         n_failures += 1
-        if n_failures > THREAD_FAIL_LIMIT:
+        if n_failures > thread_fail_limit:
             logging.error("Too many failures, exiting thread.")
             raise RuntimeError("Too many failures")
         THREAD_LOCAL.n_failures = n_failures
@@ -78,32 +81,28 @@ def scraper(url):
     logging.info(f"processing finished of {url} in {end - start:.2f} seconds.")
 
 
-def scrape_urls(
-    urls: list[str],
-    system: str = "",
-    html_dir: Path | None = None,
-    gecko_path: Path | None = None,
-    thread_fail_limit: int | None = None,
-    n_threads: int | None = None,
-):
-    global SYS, HTML_DIR, GECKO_PATH, THREAD_FAIL_LIMIT
-    SYS = system if system else SYS
-    HTML_DIR = html_dir if html_dir else HTML_DIR
-    GECKO_PATH = gecko_path if gecko_path else GECKO_PATH
-    THREAD_FAIL_LIMIT = thread_fail_limit if thread_fail_limit else THREAD_FAIL_LIMIT
-
-    logging.info(f"Using {SYS=}, {THREAD_FAIL_LIMIT=}, {HTML_DIR=}, {GECKO_PATH=}")
-
-    with ThreadPoolExecutor(max_workers=n_threads) as executor:
-        futures = [executor.submit(scraper, url) for url in urls]
+def scrape_urls(urls: list[str], config: Config):
+    with ThreadPoolExecutor(max_workers=config.n_threads) as executor:
+        futures = [
+            executor.submit(
+                scraper,
+                url=url,
+                html_dir=config.html_dir,
+                thread_fail_limit=config.thread_fail_limit,
+                rel_xpath=config.rel_xpath,
+            )
+            for url in urls
+        ]
         for future in futures:
             try:
                 future.result()
             except RuntimeError as e:
                 logging.error(f"Error: {e}, probably too many failures")
                 executor.shutdown(wait=False)
-
-
+            except KeyboardInterrupt:
+                logging.error("Keyboard interrupt")
+                executor.shutdown(wait=False)
+                raise KeyboardInterrupt
         # Must ensure drivers are quitted before threads are destroyed:
         # del thread_local
         # This should ensure that the __del__ method is run on class Driver:

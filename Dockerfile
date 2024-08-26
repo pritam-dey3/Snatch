@@ -14,7 +14,7 @@ RUN wget https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckod
 
 # Install Python dependencies
 COPY . /snatch/
-RUN pip install -r requirements.txt
+RUN pip install -e .
 
 # service tor start
 # Xvfb :1 -screen 0 1024x768x16 &
@@ -22,3 +22,5 @@ RUN pip install -r requirements.txt
 RUN Xvfb -nolisten tcp :1 & echo $? > display.pid
 # service tor status
 # ps -ef | grep Xvfb
+
+ENTRYPOINT [ "snatch" ]
