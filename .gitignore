@@ -3,3 +3,5 @@ __pycache__
 *.log
 tests/
 data/
+dist/
+snatch.egg-info/
